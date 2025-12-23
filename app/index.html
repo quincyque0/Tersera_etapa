@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Data Server</title>
+    
+</head>
+<body>
+    <div class="container">
+        <h1>Android Data Server</h1>
+        
+        <div class="stats">
+            <div class="stat">
+                <h3>Всего пакетов</h3>
+                <p id="total-packages">0</p>
+            </div>
+            <div class="stat">
+                <h3>Последний пакет</h3>
+                <p id="last-packet">--:--:--</p>
+            </div>
+            <div class="stat">
+                <h3>Размер данных</h3>
+                <p id="data-size">0 Б</p>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button onclick="loadData()">Обновить</button>
+            <button onclick="downloadJSON()">Скачать</button>
+        </div>
+        
+        <div id="table-container">
+            <div class="no-data">Загрузка данных...</div>
+        </div>
+        
+        <footer>
+            <p>Порт: 2222  Веб-интерфейс: 8080</p>
+            <p>Обновлено: <span id="update-time"></span></p>
+        </footer>
+    </div>
+    
+    <script>
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Б';
+            const k = 1024;
+            const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function formatTable(data) {
+            if (!data || data.length === 0) {
+                return '<div class="no-data">Нет полученных данных</div>';
+            }
+            
+            let rows = '';
+            const last50 = data.slice(-50).reverse();
+            
+            last50.forEach(record => {
+                rows += `
+                <tr>
+                    <td>#${record.packet_number}</td>
+                    <td>${record.timestamp}</td>
+                    <td><strong>${record.data}</strong></td>
+                </tr>
+                `;
+            });
+            
+            return `
+            <table>
+                <thead>
+                    <tr>
+                        <th width="200">Время</th>
+                        <th>Данные</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                </tbody>
+            </table>
+            `;
+        }
+        
+        function updateUI(data) {
+            document.getElementById('total-packages').textContent = data.length;
+            document.getElementById('data-size').textContent = formatBytes(JSON.stringify(data).length);
+            
+            if (data.length > 0) {
+                const lastPacket = data[data.length - 1];
+                document.getElementById('last-packet').textContent = 
+                    lastPacket.timestamp.split()[1];
+            }
+            
+            document.getElementById('table-container').innerHTML = formatTable(data);
+
+            const now = new Date();
+            document.getElementById('update-time').textContent = 
+                `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        }
+        
+        async function loadData() {
+            try {
+                const response = await fetch('/data');
+                const data = await response.json();
+                updateUI(data);
+            } catch (error) {
+                document.getElementById('table-container').innerHTML = 
+                    '<div class="no-data">Ошибка загрузки данных</div>';
+            }
+        }
+        
+        function downloadJSON() {
+            const a = document.createElement('a');
+            a.href = '/data';
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0,10).replace(/-/g, '');
+            a.download = `android_data_${dateStr}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+        
+        loadData();
+        
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

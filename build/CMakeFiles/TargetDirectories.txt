@@ -1,0 +1,5 @@
+/Users/a1/Desktop/GitHub/serverAndroid/Tersera_etapa/build/CMakeFiles/imgui.dir
+/Users/a1/Desktop/GitHub/serverAndroid/Tersera_etapa/build/CMakeFiles/implot.dir
+/Users/a1/Desktop/GitHub/serverAndroid/Tersera_etapa/build/CMakeFiles/main.dir
+/Users/a1/Desktop/GitHub/serverAndroid/Tersera_etapa/build/CMakeFiles/edit_cache.dir
+/Users/a1/Desktop/GitHub/serverAndroid/Tersera_etapa/build/CMakeFiles/rebuild_cache.dir

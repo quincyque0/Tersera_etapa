@@ -1,3 +1,10 @@
 [submodule "RoadTo1000Commits"]
 	path = RoadTo1000Commits
 	url = https://github.com/quincyque0/RoadTo1000Commits
+[submodule "third_party/implot"]
+	path = third_party/implot
+	url = https://github.com/epezent/implot.git
+[submodule "third_party/imgui"]
+	path = third_party/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking

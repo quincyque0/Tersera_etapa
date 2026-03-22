@@ -1,0 +1,81 @@
+
+.App {
+  text-align: center;
+  height: 100vh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.leaflet-popup-content {
+  font-size: 12px;
+  line-height: 1.4;
+  min-width: 180px;
+}
+
+.leaflet-popup-content strong {
+  color: #333;
+}
+
+@media (max-width: 768px) {
+  .stats-panel {
+    top: 5px;
+    right: 5px;
+    padding: 8px 12px;
+    min-width: 180px;
+  }
+  
+  .stats-panel h3 {
+    font-size: 12px;
+  }
+  
+  .stats-grid {
+    font-size: 10px;
+  }
+  
+  .legend {
+    bottom: 10px;
+    right: 5px;
+    padding: 8px 12px;
+  }
+  
+  .legend h4 {
+    font-size: 11px;
+  }
+  
+  .legend-label {
+    font-size: 10px;
+  }
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+  }
+  
+  .App {
+    height: 100%;
+    width: 100%;
+  }
+  
+  .leaflet-container {
+    height: 100%;
+    width: 100%;
+    background: #f8f8f8;
+  }
+}

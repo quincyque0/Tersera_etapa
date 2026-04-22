@@ -8,6 +8,22 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(THIRD_PARTY_DIR ${PROJECT_SOURCE_DIR}/third_party)
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
+set(EXAMPLES_DIR ${PROJECT_SOURCE_DIR}/examples)
+
+find_package(CURL REQUIRED)
+
+set(STB_INCLUDE_DIR ${THIRD_PARTY_DIR}/stb)
+if(NOT EXISTS ${STB_INCLUDE_DIR}/stb_image.h)
+    message(FATAL_ERROR "stb_image.h not found in ${STB_INCLUDE_DIR}")
+endif()
+
+if(NOT EXISTS ${STB_INCLUDE_DIR}/stb_image.c)
+    file(WRITE ${STB_INCLUDE_DIR}/stb_image.c "#define STB_IMAGE_IMPLEMENTATION\n#include \"stb_image.h\"\n")
+endif()
+
+add_library(stb_image STATIC ${STB_INCLUDE_DIR}/stb_image.c)
+target_include_directories(stb_image PUBLIC ${STB_INCLUDE_DIR})
+target_compile_options(stb_image PRIVATE -fPIC)
 
 if(APPLE)
     find_path(GLEW_INCLUDE_DIR GL/glew.h
@@ -29,7 +45,6 @@ else()
 endif()
 
 find_package(SDL2 REQUIRED)
-
 find_package(OpenGL REQUIRED)
 
 find_path(ZMQ_INCLUDE_DIR zmq.hpp
@@ -68,6 +83,8 @@ include_directories(${SDL2_INCLUDE_DIRS})
 include_directories(${OPENGL_INCLUDE_DIRS})
 include_directories(${ZMQ_INCLUDE_DIRS})
 include_directories(${POSTGRES_INCLUDE_DIRS})
+include_directories(${CURL_INCLUDE_DIRS})
+include_directories(${STB_INCLUDE_DIR})
 
 add_library(imgui STATIC
     ${THIRD_PARTY_DIR}/imgui/imgui.cpp
@@ -125,12 +142,19 @@ target_include_directories(network PUBLIC ${INCLUDE_DIR})
 target_link_libraries(network PRIVATE core parser storage utils ${ZMQ_LIBRARIES})
 target_compile_options(network PRIVATE -fPIC)
 
+add_library(map STATIC
+    ${SRC_DIR}/map/MapWindow.cpp
+)
+target_include_directories(map PUBLIC ${INCLUDE_DIR})
+target_link_libraries(map PRIVATE imgui implot stb_image ${CURL_LIBRARIES} ${OPENGL_LIBRARIES})
+target_compile_options(map PRIVATE -fPIC)
+
 add_library(gui STATIC
     ${SRC_DIR}/gui/GUIApplication.cpp
 )
 target_include_directories(gui PUBLIC ${INCLUDE_DIR})
 target_link_libraries(gui PRIVATE 
-    core storage utils imgui implot 
+    core storage utils imgui implot map
     ${SDL2_LIBRARIES} ${GLEW_LIBRARIES} ${OPENGL_LIBRARIES}
 )
 target_compile_options(gui PRIVATE -fPIC)
@@ -143,29 +167,42 @@ if(APPLE)
     find_library(COREVIDEO_LIBRARY CoreVideo)
     
     target_link_libraries(cell_signal_monitor PRIVATE 
-        gui network storage parser utils core
-        imgui implot 
+        gui network storage parser utils core map
+        imgui implot stb_image
         ${SDL2_LIBRARIES} ${GLEW_LIBRARIES}
         ${OPENGL_LIBRARIES} ${POSTGRES_LIBRARIES}
         ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${COREVIDEO_LIBRARY}
-        ${ZMQ_LIBRARIES} pthread dl
+        ${ZMQ_LIBRARIES} ${CURL_LIBRARIES} pthread dl
     )
 else()
     target_link_libraries(cell_signal_monitor PRIVATE 
-        gui network storage parser utils core
-        imgui implot 
+        gui network storage parser utils core map
+        imgui implot stb_image
         ${SDL2_LIBRARIES} ${GLEW_LIBRARIES}
         ${OPENGL_LIBRARIES} ${POSTGRES_LIBRARIES}
-        ${ZMQ_LIBRARIES} pthread dl
+        ${ZMQ_LIBRARIES} ${CURL_LIBRARIES} pthread dl
     )
 endif()
 
 target_include_directories(cell_signal_monitor PRIVATE
     ${GLEW_INCLUDE_DIRS} ${SDL2_INCLUDE_DIRS}
     ${INCLUDE_DIR} ${ZMQ_INCLUDE_DIRS} ${POSTGRES_INCLUDE_DIRS}
+    ${CURL_INCLUDE_DIRS} ${STB_INCLUDE_DIR}
 )
 
 set_target_properties(cell_signal_monitor PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
 )
 
+if(EXISTS ${EXAMPLES_DIR}/osm_tiles/tile_catcher.cpp)
+    add_executable(tile_catcher ${EXAMPLES_DIR}/osm_tiles/tile_catcher.cpp)
+    target_link_libraries(tile_catcher PRIVATE imgui implot stb_image ${CURL_LIBRARIES} ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES})
+    target_include_directories(tile_catcher PRIVATE ${STB_INCLUDE_DIR})
+    if(APPLE)
+        target_link_libraries(tile_catcher PRIVATE ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${COREVIDEO_LIBRARY})
+    endif()
+endif()
+
+message(STATUS "Configuration complete!")
+message(STATUS "  CURL: ${CURL_LIBRARIES}")
+message(STATUS "  STB Image: ${STB_INCLUDE_DIR}")

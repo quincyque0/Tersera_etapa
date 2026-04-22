@@ -14,7 +14,9 @@
 
 extern std::shared_ptr<PostgresStorage> g_storage;
 
-GUIApplication::GUIApplication(GeoData* geoInfo) : geoInfo(geoInfo) {}
+GUIApplication::GUIApplication(GeoData* geoInfo) : geoInfo(geoInfo) {
+    m_mapWindow = std::make_unique<MapWindow>();
+}
 
 GUIApplication::~GUIApplication() {}
 
@@ -243,6 +245,35 @@ void GUIApplication::renderSignalWindow() {
     ImGui::End();
 }
 
+void GUIApplication::updateMapMarkers() {
+    if (!m_mapWindow) return;
+    
+    m_mapWindow->clearMarkers();
+    
+    float lat = geoInfo->latValue.load();
+    float lon = geoInfo->lonValue.load();
+    if (lat != 0.0f || lon != 0.0f) {
+        m_mapWindow->addMarker(lat, lon, "red");
+        m_mapWindow->setCenter(lat, lon);
+    }
+    
+    std::lock_guard<std::mutex> lock(geoInfo->historyMutex);
+    int step = std::max(1, (int)geoInfo->dataHistory.size() / 200);
+    int idx = 0;
+    for (const auto& point : geoInfo->dataHistory) {
+        if (idx % step == 0 && (point.latitude != 0.0f || point.longitude != 0.0f)) {
+            int bestRssi = point.getMaxRssi();
+            std::string color;
+            if (bestRssi >= -70) color = "green";
+            else if (bestRssi >= -85) color = "yellow";
+            else color = "red";
+            
+            m_mapWindow->addMarker(point.latitude, point.longitude, color);
+        }
+        idx++;
+    }
+}
+
 void GUIApplication::run() {
     Logger::log("INFO", "Инициализация графического интерфейса");
     
@@ -257,7 +288,7 @@ void GUIApplication::run() {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     
     SDL_WindowFlags windowFlags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    SDL_Window* window = SDL_CreateWindow("Cell Signal Monitor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1400, 900, windowFlags);
+    SDL_Window* window = SDL_CreateWindow("Cell Signal Monitor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1600, 900, windowFlags);
     
     if (!window) {
         Logger::log("ERROR", "Не удалось создать окно: " + std::string(SDL_GetError()));
@@ -305,6 +336,11 @@ void GUIApplication::run() {
         return;
     }
     
+    if (geoInfo->latValue.load() != 0.0f || geoInfo->lonValue.load() != 0.0f) {
+        m_mapWindow->setCenter(geoInfo->latValue.load(), geoInfo->lonValue.load());
+        m_mapWindow->setZoomLevel(15);
+    }
+    
     Logger::log("INFO", "Графический интерфейс инициализирован успешно");
     
     bool isRunning = true;
@@ -327,9 +363,13 @@ void GUIApplication::run() {
                 isRunning = false;
         }
         
+        updateMapMarkers();
+        
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
+        
+        m_mapWindow->draw();
         
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.7f));
         renderLocationWindow();
@@ -337,8 +377,6 @@ void GUIApplication::run() {
         
         renderSystemWindow();
         renderSignalWindow();
-        
-    
         
         ImGui::Render();
         

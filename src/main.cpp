@@ -9,7 +9,7 @@
 std::shared_ptr<PostgresStorage> g_storage;
 
 int main() {
-    Logger::log("INFO", "Cell Signal Monitor с PostgreSQL");
+    Logger::log("INFO", "Cell Signal Monitor с PostgreSQL и картой");
     
     g_storage = std::make_shared<PostgresStorage>();
     g_storage->setConnectionParams("localhost", "cell_monitor", "postgres", "postgres");

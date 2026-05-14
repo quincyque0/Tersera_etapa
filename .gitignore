@@ -19,3 +19,4 @@ database/locations.json
 cmake-build-*/
 *.sql
 *ini
+*.png

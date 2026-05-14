@@ -26,6 +26,14 @@ struct TextureData {
     int height = 0;
 };
 
+struct MapPoint {
+    float lat;
+    float lon;
+    int rssi;
+    long long timestamp;
+    std::string deviceId;
+};
+
 class MapWindow {
 public:
     MapWindow();
@@ -34,8 +42,16 @@ public:
     void draw();
     void setCenter(float lat, float lon);
     void addMarker(float lat, float lon, const std::string& color = "red");
+    void addPoint(const MapPoint& point);
     void clearMarkers();
+    void clearPoints();
     void setZoomLevel(int zoom);
+    void setShowAllPoints(bool show);
+    int getZoomLevel() const { return m_currentZoom; }
+    void fitToBounds(float minLat, float maxLat, float minLon, float maxLon);
+    
+    void setHeatmap(const std::string& imagePath, double minLat, double maxLat, double minLon, double maxLon);
+    void clearHeatmap();
     
 private:
     std::map<std::string, TextureData> m_tileCache;
@@ -53,10 +69,21 @@ private:
     std::vector<Marker> m_markers;
     std::mutex m_markersMutex;
     
+    std::vector<MapPoint> m_allPoints;
+    std::mutex m_pointsMutex;
+    bool m_showAllPoints;
+    
     float m_centerLat;
     float m_centerLon;
     int m_currentZoom;
     bool m_plotInitialized;
+    
+    GLuint m_heatmapTextureId = 0;
+    double m_hmMinLat = 0.0;
+    double m_hmMaxLat = 0.0;
+    double m_hmMinLon = 0.0;
+    double m_hmMaxLon = 0.0;
+    bool m_showHeatmap = false;
     
     double mercatorXToTileX(double mercatorX, int zoom);
     double mercatorYToTileY(double mercatorY, int zoom);
@@ -64,8 +91,6 @@ private:
     double tileYToMercatorY(int tileY, int zoom);
     double latToMercator(double lat);
     double lonToMercator(double lon);
-    double mercatorToLat(double mercatorY);
-    double mercatorToLon(double mercatorX);
     
     void fetchWorker();
     static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, void* userp);

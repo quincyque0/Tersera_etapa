@@ -1,10 +1,11 @@
 #include "MapWindow.h"
-#include <imgui.h>
+#include "imgui.h"
 #include <implot.h>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <stb_image.h>
+
 
 double MapWindow::latToMercator(double lat) {
     double y = std::log(std::tan((90.0 + lat) * M_PI / 360.0)) * 180.0 / M_PI;
@@ -73,7 +74,7 @@ void MapWindow::fetchWorker() {
                 file.read(reinterpret_cast<char*>(file_data.data()), size);
             }
         } else {
-            std::string url = "https://tile.openstreetmap.org/" + std::to_string(job.zoom) + "/" + 
+            std::string url = "https://tile.openstreetmap.org/" + std::to_string(job.zoom) + "/" +
                             std::to_string(job.x) + "/" + std::to_string(job.y) + ".png";
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_USERAGENT, "CellMonitor/1.0");
@@ -120,8 +121,8 @@ MapWindow::MapWindow()
     , m_centerLat(55.7558)
     , m_centerLon(37.6173)
     , m_currentZoom(10)
-    , m_plotInitialized(false) {
-    
+    , m_plotInitialized(false)
+    , m_showAllPoints(false) {
     m_workerThread = std::thread(&MapWindow::fetchWorker, this);
 }
 
@@ -141,9 +142,69 @@ void MapWindow::setZoomLevel(int zoom) {
     m_currentZoom = std::clamp(zoom, 1, 18);
 }
 
+void MapWindow::setShowAllPoints(bool show) {
+    m_showAllPoints = show;
+}
+
+void MapWindow::fitToBounds(float minLat, float maxLat, float minLon, float maxLon) {
+    m_centerLat = (minLat + maxLat) / 2.0f;
+    m_centerLon = (minLon + maxLon) / 2.0f;
+    
+    
+    m_plotInitialized = false; 
+    
+    double mercYMin = latToMercator(minLat);
+    double mercYMax = latToMercator(maxLat);
+    
+    ImPlot::SetNextAxesLimits(
+        minLon - 0.05, 
+        maxLon + 0.05,
+        mercYMin - 0.05,
+        mercYMax + 0.05,
+        ImPlotCond_Always
+    );
+}
+
+void MapWindow::setHeatmap(const std::string& imagePath, double minLat, double maxLat, double minLon, double maxLon) {
+    clearHeatmap();
+    
+    int w, h, c;
+    stbi_set_flip_vertically_on_load(false);
+    unsigned char* data = stbi_load(imagePath.c_str(), &w, &h, &c, 4);
+    if (data) {
+        glGenTextures(1, &m_heatmapTextureId);
+        glBindTexture(GL_TEXTURE_2D, m_heatmapTextureId);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        stbi_image_free(data);
+        
+        m_hmMinLat = minLat;
+        m_hmMaxLat = maxLat;
+        m_hmMinLon = minLon;
+        m_hmMaxLon = maxLon;
+        m_showHeatmap = true;
+    }
+}
+
+void MapWindow::clearHeatmap() {
+    if (m_heatmapTextureId != 0) {
+        glDeleteTextures(1, &m_heatmapTextureId);
+        m_heatmapTextureId = 0;
+    }
+    m_showHeatmap = false;
+}
+
 void MapWindow::addMarker(float lat, float lon, const std::string& color) {
     std::lock_guard<std::mutex> lock(m_markersMutex);
     m_markers.push_back({lat, lon, color});
+}
+
+void MapWindow::addPoint(const MapPoint& point) {
+    std::lock_guard<std::mutex> lock(m_pointsMutex);
+    m_allPoints.push_back(point);
 }
 
 void MapWindow::clearMarkers() {
@@ -151,8 +212,24 @@ void MapWindow::clearMarkers() {
     m_markers.clear();
 }
 
+void MapWindow::clearPoints() {
+    std::lock_guard<std::mutex> lock(m_pointsMutex);
+    m_allPoints.clear();
+}
+
+
 void MapWindow::draw() {
     ImGui::Begin("Map Window");
+    
+    if (ImGui::Checkbox("Show Points", &m_showAllPoints)) {
+        if (m_showAllPoints) {
+            setZoomLevel(12);
+        }
+    }
+    
+
+    
+    ImGui::Separator();
     
     ImVec2 mapSize = ImGui::GetContentRegionAvail();
     if (mapSize.x < 100 || mapSize.y < 100) {
@@ -253,24 +330,53 @@ void MapWindow::draw() {
                 }
             }
         }
-
-        std::lock_guard<std::mutex> lock(m_markersMutex);
-        for (const auto& marker : m_markers) {
-            double mercY = latToMercator(marker.lat);
-            ImVec4 color;
-            if (marker.color == "red") color = ImVec4(1, 0, 0, 1);
-            else if (marker.color == "green") color = ImVec4(0, 1, 0, 1);
-            else if (marker.color == "yellow") color = ImVec4(1, 1, 0, 1);
-            else color = ImVec4(1, 0, 0, 1);
+        
+        if (m_showHeatmap && m_heatmapTextureId != 0) {
+            ImPlotPoint minPoint{ m_hmMinLon, latToMercator(m_hmMinLat) };
+            ImPlotPoint maxPoint{ m_hmMaxLon, latToMercator(m_hmMaxLat) };
             
-            float lonVal = static_cast<float>(marker.lon);
-            float mercYVal = static_cast<float>(mercY);
-            
-            ImPlot::PushStyleColor(ImPlotCol_MarkerFill, color);
-            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6.0f);
-            ImPlot::PlotScatter(("##marker_" + std::to_string(marker.lat) + "_" + std::to_string(marker.lon)).c_str(), 
-                                &lonVal, &mercYVal, 1);
-            ImPlot::PopStyleColor();
+            ImVec4 tint = ImVec4(1, 1, 1, 0.7f); 
+            ImPlot::PlotImage("##heatmap", (ImTextureID)(intptr_t)m_heatmapTextureId, minPoint, maxPoint, ImVec2(0,0), ImVec2(1,1), tint);
+        }
+        
+        if (m_showAllPoints) {
+            std::lock_guard<std::mutex> lock(m_pointsMutex);
+            for (const auto& point : m_allPoints) {
+                double mercY = latToMercator(point.lat);
+                ImVec4 color;
+                if (point.rssi >= -70) color = ImVec4(0, 1, 0, 0.6f);
+                else if (point.rssi >= -85) color = ImVec4(1, 1, 0, 0.6f);
+                else color = ImVec4(1, 0, 0, 0.6f);
+                
+                float lonVal = static_cast<float>(point.lon);
+                float mercYVal = static_cast<float>(mercY);
+                
+                ImPlot::PushStyleColor(ImPlotCol_MarkerFill, color);
+                ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 4.0f);
+                ImPlot::PlotScatter(("##point_" + std::to_string(point.timestamp)).c_str(), &lonVal, &mercYVal, 1);
+                ImPlot::PopStyleColor();
+            }
+        }
+        
+        if (m_showAllPoints) {
+            std::lock_guard<std::mutex> lock(m_markersMutex);
+            for (const auto& marker : m_markers) {
+                double mercY = latToMercator(marker.lat);
+                ImVec4 color;
+                if (marker.color == "red") color = ImVec4(1, 0, 0, 1);
+                else if (marker.color == "green") color = ImVec4(0, 1, 0, 1);
+                else if (marker.color == "yellow") color = ImVec4(1, 1, 0, 1);
+                else color = ImVec4(1, 0, 0, 1);
+                
+                float lonVal = static_cast<float>(marker.lon);
+                float mercYVal = static_cast<float>(mercY);
+                
+                ImPlot::PushStyleColor(ImPlotCol_MarkerFill, color);
+                ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 8.0f);
+                ImPlot::PlotScatter(("##marker_" + std::to_string(marker.lat) + "_" + std::to_string(marker.lon)).c_str(), 
+                                    &lonVal, &mercYVal, 1);
+                ImPlot::PopStyleColor();
+            }
         }
         
         ImPlot::EndPlot();
@@ -278,6 +384,7 @@ void MapWindow::draw() {
     
     ImGui::SliderInt("Zoom Level", &m_currentZoom, 1, 18);
     ImGui::Text("Center: %.6f, %.6f", m_centerLat, m_centerLon);
+    ImGui::Text("Points on map: %zu", m_allPoints.size());
     
     ImGui::End();
 }

@@ -21,7 +21,7 @@ if(NOT EXISTS ${STB_INCLUDE_DIR}/stb_image.c)
     file(WRITE ${STB_INCLUDE_DIR}/stb_image.c "#define STB_IMAGE_IMPLEMENTATION\n#include \"stb_image.h\"\n")
 endif()
 
-add_library(stb_image STATIC ${STB_INCLUDE_DIR}/stb_image.c)
+add_library(stb_image STATIC ${STB_INCLUDE_DIR}/stb_image.c ${STB_INCLUDE_DIR}/stb_image_write.c)
 target_include_directories(stb_image PUBLIC ${STB_INCLUDE_DIR})
 target_compile_options(stb_image PRIVATE -fPIC)
 
@@ -131,8 +131,8 @@ target_compile_options(parser PRIVATE -fPIC)
 add_library(storage STATIC
     ${SRC_DIR}/storage/PostgresStorage.cpp
 )
-target_include_directories(storage PUBLIC ${INCLUDE_DIR})
-target_link_libraries(storage PRIVATE core parser utils ${POSTGRES_LIBRARIES})
+target_include_directories(storage PUBLIC ${INCLUDE_DIR} ${THIRD_PARTY_DIR}/imgui ${THIRD_PARTY_DIR}/implot)
+target_link_libraries(storage PRIVATE core parser utils ${POSTGRES_LIBRARIES} )
 target_compile_options(storage PRIVATE -fPIC)
 
 add_library(network STATIC

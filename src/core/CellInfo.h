@@ -11,8 +11,10 @@ struct CellInfo {
     bool isRegistered;          
     std::string operator_;   
     long long timestamp;       
+    int rsrp;
+    int rsrq;
     
-    CellInfo() : rssi(0), arfcn(0), cellId(0), lac(0), isRegistered(false), timestamp(0) {}
+    CellInfo() : rssi(0), arfcn(0), cellId(0), lac(0), isRegistered(false), timestamp(0), rsrp(0), rsrq(0) {}
 };
 
 #endif
